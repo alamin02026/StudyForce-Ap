@@ -1,0 +1,48 @@
+name: Build APK
+
+on:
+  workflow_dispatch:
+  push:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Unzip package and unpack project
+        run: |
+          unzip -o StudyForce_GitHub_Package.zip -d unzipped_pkg
+          python3 - <<'PY'
+          import re, os, glob
+          files = glob.glob('unzipped_pkg/**/StudyForce_all_code.txt', recursive=True)
+          if not files:
+              raise FileNotFoundError("StudyForce_all_code.txt not found inside zip!")
+          txt = open(files[0], encoding='utf-8').read()
+          parts = re.split(r'\n?===== FILE: (.+?) =====\n', txt)
+          os.makedirs('proj', exist_ok=True)
+          for i in range(1, len(parts), 2):
+              path = os.path.join('proj', parts[i].strip())
+              os.makedirs(os.path.dirname(path), exist_ok=True)
+              with open(path, 'w', encoding='utf-8') as f:
+                  f.write(parts[i + 1])
+          print('files written:', (len(parts) - 1) // 2)
+          PY
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: 8.7
+
+      - name: Build debug APK
+        working-directory: proj
+        run: gradle assembleDebug --no-daemon
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: StudyForce-APK
+          path: proj/app/build/outputs/apk/debug/app-debug.apk
